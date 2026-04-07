@@ -2,6 +2,8 @@ name: Supabase Direct Keep-Alive
 
 on:
   schedule:
+    # Runs at minute 47 of every hour.
+    # Non-standard minutes avoid GitHub traffic spikes.
     - cron: '47 * * * *'
   workflow_dispatch: 
 
@@ -14,6 +16,7 @@ jobs:
           URL: ${{ secrets.SUPABASE_URL }}
           KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
+          # Performs a real REST API call to reset the Supabase 'pause' timer.
           RESPONSE=$(curl -s -X GET "${URL}/rest/v1/clan_settings?select=id&limit=1" \
             -H "apikey: ${KEY}" \
             -H "Authorization: Bearer ${KEY}" \
@@ -21,19 +24,52 @@ jobs:
             --retry 3 \
             -w "%{http_code}" \
             -o /dev/null)
-          [ "$RESPONSE" -eq 200 ] && echo "✅ DB Active" || exit 1
+
+          echo "Database Status: $RESPONSE"
+
+          if [ "$RESPONSE" -eq 200 ]; then
+            echo "✅ Activity confirmed. Supabase timer reset."
+          else
+            echo "❌ Error: Received status $RESPONSE. Project may be paused or unreachable."
+            exit 1
+          fi
 
       - name: Real GET - Storage Asset
         run: |
+          # Simulates a real user downloading an asset from storage.
           STORAGE_URL="https://spweefkycqqhowjiptqs.supabase.co/storage/v1/object/public/media/favicon.png"
+          
           RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "$STORAGE_URL")
-          echo "Storage Status: $RESPONSE"
-          [ "$RESPONSE" -eq 200 ] && echo "✅ Storage Active" || echo "⚠️ Storage Issue"
 
-      - name: Real GET - Frontend
+          echo "Storage Status: $RESPONSE"
+
+          if [ "$RESPONSE" -eq 200 ]; then
+            echo "✅ Storage asset downloaded successfully."
+          else
+            echo "⚠️ Storage asset GET failed with status $RESPONSE."
+          fi
+
+      - name: Real GET - Frontend (Anti-Rate Limit)
         run: |
           FRONTEND_URL="https://giapha.la.id.vn/login"
-          # -L follows redirects, -A simulates a browser user-agent
-          RESPONSE=$(curl -sL -o /dev/null -A "Mozilla/5.0" -w "%{http_code}" "$FRONTEND_URL")
+          
+          # We use a full Chrome User-Agent and retries to avoid the 429 error.
+          # -L follows redirects.
+          # --retry 3 handles transient network or rate-limiting issues.
+          RESPONSE=$(curl -sL -o /dev/null \
+            -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36" \
+            --connect-timeout 10 \
+            --retry 3 \
+            --retry-delay 5 \
+            -w "%{http_code}" \
+            "$FRONTEND_URL")
+
           echo "Frontend Status: $RESPONSE"
-          [ "$RESPONSE" -eq 200 ] && echo "✅ Frontend Active" || echo "⚠️ Frontend Issue"
+
+          if [ "$RESPONSE" -eq 200 ]; then
+            echo "✅ Frontend Active."
+          elif [ "$RESPONSE" -eq 429 ]; then
+            echo "⚠️ Frontend returned 429 (Too Many Requests). The server is alive, but blocking the bot."
+          else
+            echo "❌ Frontend returned $RESPONSE. It might be down."
+          fi
