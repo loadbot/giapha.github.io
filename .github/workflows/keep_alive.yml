@@ -2,7 +2,6 @@ name: Supabase Direct Keep-Alive
 
 on:
   schedule:
-    # Runs at 23 minutes past every hour
     - cron: '23 * * * *'
   workflow_dispatch: 
 
@@ -11,15 +10,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Force Database Activity
-        # This calls the Supabase API directly to ensure the DB stays "Active"
+        # We map the secrets to Environment Variables here
+        env:
+          URL: ${{ secrets.SUPABASE_URL }}
+          KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          curl -X GET "${{ secrets.SUPABASE_URL }}/rest/v1/clan_settings?select=id&limit=1" \
-          -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-          -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+          curl -X GET "${URL}/rest/v1/clan_settings?select=id&limit=1" \
+          -H "apikey: ${KEY}" \
+          -H "Authorization: Bearer ${KEY}" \
           -s -o /dev/null -w "Database Status: %{http_code}\n"
 
       - name: Wake Up Frontend
-        # We still ping the site, but we don't care if it returns 429 
-        # because the Database call above is what matters to Supabase.
         run: |
           curl -sL -A "Mozilla/5.0" https://giapha.la.id.vn/login -o /dev/null
