@@ -37,9 +37,7 @@ jobs:
 
       - name: Wake Up Frontend
         run: |
-          # -I fetches headers only (fast and avoids body-writing errors).
-          # -s hides progress, > /dev/null keeps logs clean.
-          if curl -sI -m 30 -A "Mozilla/5.0" https://giapha.la.id.vn/login > /dev/null; then
+          if curl -sL -m 30 -A "Mozilla/5.0" https://giapha.la.id.vn/login > /dev/null; then
             echo "✅ Frontend ping sent successfully."
           else
             echo "⚠️ Frontend ping failed, but server might still be waking up."
