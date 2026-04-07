@@ -1,0 +1,11 @@
+name: Hourly Frontend Warmup
+on:
+  schedule:
+    - cron: '23,53 * * * *'
+  workflow_dispatch: 
+jobs:
+  ping_site:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Login Page
+        run: curl -sL -w "Status: %{http_code}\n" https://giapha.la.id.vn/login -o /dev/null
