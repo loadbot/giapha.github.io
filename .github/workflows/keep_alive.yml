@@ -14,11 +14,20 @@ jobs:
           URL: ${{ secrets.SUPABASE_URL }}
           KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          curl -X GET "${URL}/rest/v1/clan_settings?select=id&limit=1" \
-          -H "apikey: ${KEY}" \
-          -H "Authorization: Bearer ${KEY}" \
-          -s -o /dev/null -w "Database Status: %{http_code}\n"
+          # Capture the HTTP status code
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X GET "${URL}/rest/v1/clan_settings?select=id&limit=1" \
+            -H "apikey: ${KEY}" \
+            -H "Authorization: Bearer ${KEY}")
+          
+          if [ $STATUS -eq 200 ]; then
+            echo "Database is active (Status: $STATUS)"
+          else
+            echo "Database ping failed with status: $STATUS"
+            exit 1
+          fi
 
       - name: Wake Up Frontend
         run: |
-          curl -sL -A "Mozilla/5.0" https://giapha.la.id.vn/login -o /dev/null
+          # Added -f to fail on 4xx/5xx errors and -m to set a timeout
+          curl -f -sL -m 30 -A "KeepAlive/1.0" https://giapha.la.id.vn/login -o /dev/null
