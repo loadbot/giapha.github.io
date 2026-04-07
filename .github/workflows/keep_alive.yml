@@ -2,6 +2,7 @@ name: Supabase Direct Keep-Alive
 
 on:
   schedule:
+    # Runs every hour at minute 23
     - cron: '23 * * * *'
   workflow_dispatch: 
 
@@ -14,13 +15,13 @@ jobs:
           URL: ${{ secrets.SUPABASE_URL }}
           KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          # Capture the HTTP status code
+          # Capture the HTTP status code from the Supabase REST API
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
             -X GET "${URL}/rest/v1/clan_settings?select=id&limit=1" \
             -H "apikey: ${KEY}" \
             -H "Authorization: Bearer ${KEY}")
           
-          if [ $STATUS -eq 200 ]; then
+          if [ "$STATUS" -eq 200 ]; then
             echo "Database is active (Status: $STATUS)"
           else
             echo "Database ping failed with status: $STATUS"
@@ -29,5 +30,19 @@ jobs:
 
       - name: Wake Up Frontend
         run: |
-          # Added -f to fail on 4xx/5xx errors and -m to set a timeout
-          curl -f -sL -m 30 -A "KeepAlive/1.0" https://giapha.la.id.vn/login -o /dev/null
+          # We capture the status code and allow for redirects (301/302)
+          # Increased timeout to 60s to account for potential cold starts
+          STATUS=$(curl -sL -m 60 -A "KeepAlive/1.0" \
+            -w "%{http_code}" \
+            "https://giapha.la.id.vn/login" -o /dev/null)
+          
+          echo "Frontend Status: $STATUS"
+          
+          # Check if the status is 200 (OK), 301/302 (Redirect), or 401 (Unauthorized - still means server is up)
+          if [[ "$STATUS" == "200" || "$STATUS" == "301" || "$STATUS" == "302" || "$STATUS" == "401" ]]; then
+            echo "Frontend is awake and responding."
+          else
+            echo "Frontend returned unexpected status: $STATUS"
+            # Exit 1 will mark the GitHub Action as failed if the site is down
+            exit 1
+          fi
