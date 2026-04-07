@@ -2,12 +2,17 @@ name: Hourly Frontend Warmup
 
 on:
   schedule:
-    - cron: '23,53 * * * *'
+    # Let's stick to once an hour to avoid triggering the 429 again
+    - cron: '23 * * * *'
   workflow_dispatch: 
 
 jobs:
   ping_site:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Login Page
-        run: curl -sL -w "Status:%{http_code}\n" https://giapha.la.id.vn/login -o /dev/null
+      - name: Ping Login Page (Stealth Mode)
+        # We added a User-Agent header (-H) to look like a real Chrome browser
+        run: |
+          curl -sL -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
+          -w "Status:%{http_code}\n" \
+          https://giapha.la.id.vn/login -o /dev/null
