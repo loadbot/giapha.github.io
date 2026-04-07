@@ -2,8 +2,6 @@ name: Supabase Direct Keep-Alive
 
 on:
   schedule:
-    # Runs at minute 47 of every hour.
-    # Non-standard minutes avoid GitHub traffic spikes.
     - cron: '47 * * * *'
   workflow_dispatch: 
 
@@ -16,8 +14,6 @@ jobs:
           URL: ${{ secrets.SUPABASE_URL }}
           KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          # Use --retry to handle transient network blips.
-          # We check for a 200 status to confirm the DB is actually active.
           RESPONSE=$(curl -s -X GET "${URL}/rest/v1/clan_settings?select=id&limit=1" \
             -H "apikey: ${KEY}" \
             -H "Authorization: Bearer ${KEY}" \
@@ -25,20 +21,19 @@ jobs:
             --retry 3 \
             -w "%{http_code}" \
             -o /dev/null)
+          [ "$RESPONSE" -eq 200 ] && echo "✅ DB Active" || exit 1
 
-          echo "Database Status: $RESPONSE"
-
-          if [ "$RESPONSE" -eq 200 ]; then
-            echo "✅ Activity confirmed. Supabase timer reset."
-          else
-            echo "❌ Error: Received status $RESPONSE. Project may be paused or unreachable."
-            exit 1
-          fi
-
-      - name: Wake Up Frontend
+      - name: Real GET - Storage Asset
         run: |
-          if curl -sL -m 30 -A "Mozilla/5.0" https://giapha.la.id.vn/login > /dev/null; then
-            echo "✅ Frontend ping sent successfully."
-          else
-            echo "⚠️ Frontend ping failed, but server might still be waking up."
-          fi
+          STORAGE_URL="https://spweefkycqqhowjiptqs.supabase.co/storage/v1/object/public/media/favicon.png"
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "$STORAGE_URL")
+          echo "Storage Status: $RESPONSE"
+          [ "$RESPONSE" -eq 200 ] && echo "✅ Storage Active" || echo "⚠️ Storage Issue"
+
+      - name: Real GET - Frontend
+        run: |
+          FRONTEND_URL="https://giapha.la.id.vn/login"
+          # -L follows redirects, -A simulates a browser user-agent
+          RESPONSE=$(curl -sL -o /dev/null -A "Mozilla/5.0" -w "%{http_code}" "$FRONTEND_URL")
+          echo "Frontend Status: $RESPONSE"
+          [ "$RESPONSE" -eq 200 ] && echo "✅ Frontend Active" || echo "⚠️ Frontend Issue"
