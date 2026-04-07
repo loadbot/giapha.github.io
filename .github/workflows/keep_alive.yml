@@ -2,7 +2,8 @@ name: Supabase Direct Keep-Alive
 
 on:
   schedule:
-    # Set to a non-standard minute to avoid GitHub traffic spikes
+    # Runs at minute 47 of every hour.
+    # Non-standard minutes avoid GitHub traffic spikes.
     - cron: '47 * * * *'
   workflow_dispatch: 
 
@@ -15,8 +16,8 @@ jobs:
           URL: ${{ secrets.SUPABASE_URL }}
           KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          # Use --retry to handle transient network blips automatically
-          # Capture the HTTP status code to ensure Supabase is actually up
+          # Use --retry to handle transient network blips.
+          # We check for a 200 status to confirm the DB is actually active.
           RESPONSE=$(curl -s -X GET "${URL}/rest/v1/clan_settings?select=id&limit=1" \
             -H "apikey: ${KEY}" \
             -H "Authorization: Bearer ${KEY}" \
@@ -28,15 +29,18 @@ jobs:
           echo "Database Status: $RESPONSE"
 
           if [ "$RESPONSE" -eq 200 ]; then
-            echo "✅ Activity confirmed."
+            echo "✅ Activity confirmed. Supabase timer reset."
           else
-            echo "❌ Error: Received status $RESPONSE"
+            echo "❌ Error: Received status $RESPONSE. Project may be paused or unreachable."
             exit 1
           fi
 
       - name: Wake Up Frontend
         run: |
-          # Use -I (Fetch headers only) to avoid "Exit Code 23" body-writing errors
-          # Redirect output to /dev/null for a cleaner log
-          curl -sI -m 30 -A "Mozilla/5.0" https://giapha.la.id.vn/login > /dev/null
-          echo "✅ Frontend ping sent successfully."
+          # -I fetches headers only (fast and avoids body-writing errors).
+          # -s hides progress, > /dev/null keeps logs clean.
+          if curl -sI -m 30 -A "Mozilla/5.0" https://giapha.la.id.vn/login > /dev/null; then
+            echo "✅ Frontend ping sent successfully."
+          else
+            echo "⚠️ Frontend ping failed, but server might still be waking up."
+          fi
