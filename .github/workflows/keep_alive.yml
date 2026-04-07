@@ -2,6 +2,7 @@ name: Supabase Direct Keep-Alive
 
 on:
   schedule:
+    # Set to a non-standard minute to avoid GitHub traffic spikes
     - cron: '47 * * * *'
   workflow_dispatch: 
 
@@ -14,7 +15,8 @@ jobs:
           URL: ${{ secrets.SUPABASE_URL }}
           KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          # Keep retry for the database as it is the most important part
+          # Use --retry to handle transient network blips automatically
+          # Capture the HTTP status code to ensure Supabase is actually up
           RESPONSE=$(curl -s -X GET "${URL}/rest/v1/clan_settings?select=id&limit=1" \
             -H "apikey: ${KEY}" \
             -H "Authorization: Bearer ${KEY}" \
@@ -35,6 +37,6 @@ jobs:
       - name: Wake Up Frontend
         run: |
           # Use -I (Fetch headers only) to avoid "Exit Code 23" body-writing errors
-          # This is the cleanest way to "ping" a web server
+          # Redirect output to /dev/null for a cleaner log
           curl -sI -m 30 -A "Mozilla/5.0" https://giapha.la.id.vn/login > /dev/null
           echo "✅ Frontend ping sent successfully."
