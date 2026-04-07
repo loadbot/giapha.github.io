@@ -2,8 +2,8 @@ name: Supabase Direct Keep-Alive
 
 on:
   schedule:
-    # Running once an hour is great for preventing cold starts
-    - cron: '23 * * * *'
+    # Changed from 23 to 47 to avoid "on-the-quarter-hour" traffic spikes
+    - cron: '47 * * * *'
   workflow_dispatch: 
 
 jobs:
@@ -15,26 +15,26 @@ jobs:
           URL: ${{ secrets.SUPABASE_URL }}
           KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          # Added --connect-timeout to prevent the action from hanging
-          # Added logic to ensure we get a 200/201 from Supabase
+          # Use --retry to handle transient network blips automatically
           RESPONSE=$(curl -s -X GET "${URL}/rest/v1/clan_settings?select=id&limit=1" \
             -H "apikey: ${KEY}" \
             -H "Authorization: Bearer ${KEY}" \
             --connect-timeout 10 \
+            --retry 3 \
             -w "%{http_code}" \
             -o /dev/null)
 
           echo "Database Status: $RESPONSE"
 
-          # If Supabase is paused or down, it won't return 200. 
-          # This failure will trigger a GitHub notification to you.
-          if [ "$RESPONSE" -ne 200 ]; then
-            echo "Warning: Database did not return 200 OK. Project might be paused."
+          if [ "$RESPONSE" -eq 200 ]; then
+            echo "✅ Activity confirmed."
+          else
+            echo "❌ Error: Received status $RESPONSE"
             exit 1
           fi
 
       - name: Wake Up Frontend
         run: |
-          # Added -m 30 (max time) so the runner doesn't waste minutes if the site is slow
-          # Kept your Mozilla User-Agent as it bypasses basic bot filters
-          curl -sL -m 30 -A "Mozilla/5.0" https://giapha.la.id.vn/login -o /dev/null
+          # Added --retry so it doesn't fail if the frontend is just slow to wake up
+          curl -sL -m 30 --retry 2 -A "Mozilla/5.0" https://giapha.la.id.vn/login -o /dev/null
+          echo "✅ Frontend ping sent."
