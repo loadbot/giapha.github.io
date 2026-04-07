@@ -1,18 +1,25 @@
-name: Hourly Frontend Warmup
+name: Supabase Direct Keep-Alive
 
 on:
   schedule:
-    # Let's stick to once an hour to avoid triggering the 429 again
+    # Runs at 23 minutes past every hour
     - cron: '23 * * * *'
   workflow_dispatch: 
 
 jobs:
-  ping_site:
+  ping_supabase:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Login Page (Stealth Mode)
-        # We added a User-Agent header (-H) to look like a real Chrome browser
+      - name: Force Database Activity
+        # This calls the Supabase API directly to ensure the DB stays "Active"
         run: |
-          curl -sL -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
-          -w "Status:%{http_code}\n" \
-          https://giapha.la.id.vn/login -o /dev/null
+          curl -X GET "${{ secrets.SUPABASE_URL }}/rest/v1/clan_settings?select=id&limit=1" \
+          -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+          -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+          -s -o /dev/null -w "Database Status: %{http_code}\n"
+
+      - name: Wake Up Frontend
+        # We still ping the site, but we don't care if it returns 429 
+        # because the Database call above is what matters to Supabase.
+        run: |
+          curl -sL -A "Mozilla/5.0" https://giapha.la.id.vn/login -o /dev/null
